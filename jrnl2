@@ -12,6 +12,7 @@ MAIN_JOURNAL="$HOME/journals/journal.txt"
 COMMANDS=()
 OPTIONS=()
 declare -A ARGS=()
+SEARCH_ARGS=()
 
 function jrnl_time_start
 {
@@ -67,19 +68,35 @@ function jrnl_entry_import
 
 }
 
-# TODO: can pass disjunctive arguments in regex, but conjunctive, in any order?
-    # awk '/foo/ and& /bar/'
+# Pass disjunctive arguments in regex (ie 'pat1|pat2' or '@(tag1|tag2)'
+# Pass conjunctive arguments as separate search -s operations, which are passed as separate arguments here
+    # awk '/foo/ && /bar/'
     # grep -P '(?=.*?word1)(?=.*?word2)(?=.*?word3)^.*$'
-    # can also pass multiple conditional patterns in sed (ie /pat1/{/pat2/p};d)
-# TODO: implement max_entries by doing a 'short' | tail -n | head -1 and finding the initial timestamp. Then redo the record search starting from that timestamp.
+# max_entries works by doing a 'short' | tail -n | head -1 and finding the initial timestamp. Then redo the record search starting from that timestamp.
 # TODO: date search (on, before, after, last week, last 7 days, ...)
+    # Resolve partially via plain regex search on the date fields 
+        # ie '^2018-(0[7-9]|10)' for July-October of 2018
 function jrnl_entry_search
 {
-    pattern=$1
+    n=0
     [[ "${OPTIONS[*]}" =~ short ]] && instr='P' || instr='p'
-    [[ "${OPTIONS[*]}" =~ max_entries ]] && n=${ARGS['max_entries']} || n=0
+    [[ "${OPTIONS[*]}" =~ max_entries ]] && n=${ARGS['max_entries']}
     # TODO: handle last line of file
-    sed -nr "/^[0-9]{4}-[0-9]{2}-[0-9]{2}/{x;/$pattern/$instr;d}; {H;d}" "$MAIN_JOURNAL"
+    search_cmd='sed -nr "/^[0-9]{4}-[0-9]{2}-[0-9]{2}/{x;//$instr;d}; {H;d}"'
+    while [[ -n $1 ]]; do
+        pattern=$1
+        search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/\1}/' <<< "$search_cmd")
+        shift
+    done
+    if [[ $n -gt 0 ]]; then
+        prev_instr=$instr
+        instr='P'
+        start_line=$(eval "$search_cmd $MAIN_JOURNAL | tail -$n | head -1")
+        instr=$prev_instr
+        sed -n "/$start_line/,\$p" "$MAIN_JOURNAL" | eval "$search_cmd" 
+    else
+        eval "$search_cmd $MAIN_JOURNAL"
+    fi
 }
 
 # Adds entry in preference of
@@ -140,18 +157,18 @@ EOF
 
 function parseargs() {
     while [[ -n $1 ]]; do
-        arg_needed=0
+        args_needed=0
         case $1 in
             # Switches and configuration
             -t|--tags) COMMANDS+=('tags');;
             --short) OPTIONS+=('short');;
             -s|--search) 
-                arg_needed=1
+                args_needed=1
                 is_opt=0
                 cmd="search"
                 ;;
             -n|--max_entries) 
-                arg_needed=1
+                args_needed=1
                 is_opt=1
                 cmd="max_entries"
                 ;;
@@ -162,10 +179,10 @@ function parseargs() {
             *) return;; 
         esac
         shift
-        if [[ $arg_needed == 1 ]]; then
+        if [[ $args_needed == 1 ]]; then
             [[ $# -lt 1 || $1 =~ ^\- ]] && echo "$cmd needs an argument" && exit 128
             [[ $is_opt == 1 ]] && OPTIONS+=("$cmd") || COMMANDS+=("$cmd")
-            ARGS["$cmd"]="$1"
+            [[ "$cmd" == "search" ]] && SEARCH_ARGS+=("$1") || ARGS["$cmd"]="$1" 
             shift
         fi
     done
@@ -176,7 +193,7 @@ parseargs "$@"
 [[ ${#COMMANDS} == 0 ]] && jrnl_entry_add "$@" && exit 0
 
 case ${COMMANDS[0]} in
-    search) jrnl_entry_search  "${ARGS['search']}";;
+    search) jrnl_entry_search  "${SEARCH_ARGS[@]}";;
     tags) grep -o '@\w\+' $MAIN_JOURNAL | sort | uniq -ci | sort -nr;;
     time_start) jrnl_time_start;;
     time_end) jrnl_time_end;;
