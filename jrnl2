@@ -88,23 +88,32 @@ function jrnl_entry_search
 # 3. Edited in $EDITOR
 function jrnl_entry_add
 {
-    filter='1s/\.\s\+/.\n/'
-    read -rt .01 input
-    if [[ "$input" ]] ; then
-        entry=$(sed "$filter" <<< $input)
-    elif [[ -n $1 ]]; then
-        entry=$(sed "$filter" <<< "${@:1}")
-    else
-        # TODO: how to wait for $EDITOR to truly exit?
-        # TODO: disregard empty file
-        # TODO: Return status upon entry termination
-        tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
-        trap 'rm "$tmpfile"' 0 1 15
-        $EDITOR $tmpfile
-        entry=$(sed "$filter" $tmpfile)
-        #rm $tmpfile
+    # First, try stdin
+    entry=$(
+        while read -rt .01 stdin; do
+            echo "$stdin"
+        done
+    )
+    if [[ -z "$entry" ]]; then
+        if [[ -n $1 ]]; then 
+            entry="${@:1}"
+        else
+            # TODO: how to wait for $EDITOR to truly exit?
+            # TODO: disregard empty file
+            tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
+            trap 'rm "$tmpfile"' 0 1 15
+            $EDITOR $tmpfile
+            entry=$(cat $tmpfile)
+            #rm $tmpfile
+        fi
     fi
-    echo -e "\n$(date '+%Y-%m-%d %H:%M') $entry" >> "$MAIN_JOURNAL"
+    if [[ -n "$entry" ]]; then
+        filter='1s/\.\s\+/.\n/' # Separate the first sentence from rest by a NL.
+        echo -e "\n$(date '+%Y-%m-%d %H:%M') $(sed "$filter" <<< "$entry")" >> "$MAIN_JOURNAL"
+        echo "1 new entry written"
+    else 
+        echo "Journal unmodified"
+    fi
 }
 
 #
