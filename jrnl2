@@ -97,7 +97,7 @@ function jrnl_entry_search
     record_start_pat='^[0-9]{4}-[0-9]{2}-[0-9]{2}'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner. Could place a blank line at end always.
-    search_cmd='sed -nr "/'$record_start_pat'/{x;/./I$instr;d}; \${x;G;/./I$instr}; {H}"'
+    search_cmd='sed -nr "/'$record_start_pat'/{x;/./I$instr;d; \${x;/./I$instr;d}}; \${x;G;/./I$instr}; {H}"'
     while [[ -n $1 ]]; do
         pattern=$1
         search_cmd=$(sed -r 's/([^\/]*\$instr)/{\/'"$pattern"'\/\1}/g' <<< "$search_cmd")
@@ -162,7 +162,7 @@ function jrnl_entry_add
     fi
     if [[ -n "$entry" ]]; then
         filter='1s/\.\s\+/.\n/' # Separate the first sentence from rest by a NL.
-        echo -e "\n$(date '+%Y-%m-%d %H:%M') $(sed "$filter" <<< "$entry")" >> "$MAIN_JOURNAL"
+        echo -e "$(date '+%Y-%m-%d %H:%M') $(sed "$filter" <<< "$entry")\n" >> "$MAIN_JOURNAL"
         echo "1 new entry written"
     else 
         echo "Journal unmodified"
