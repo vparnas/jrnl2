@@ -1,15 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
-CFG_FILE="~/.jrnl2.rc"
+CFG_FILE="$HOME/.jrnl2.rc"
 # parent tag included for all time-tracking entries
 TIME_TRACK_TAG="@time-track" 
 # If non-blank, use this journal for all time-tracking, instead of the default
 TIME_TRACK_JOURNAL=""
-MAIN_JOURNAL="$HOME/journals/journal.txt"
-TAG_COLOR="00;36" 
+#TAG_COLOR="00;36" 
 
-#GREP_COLORS="mt=00;34" grep --color=always 'two\|$'
-#GREP_COLORS="mt=00;34" grep --color=always -e '' -e 'two'
+declare -A JOURNALS=(
+    ['default']="$HOME/journals/journal.txt"
+)
+JOURNAL="${JOURNALS['default']}"
 
 # If exists, reads the above configuration from the external config
 [[ -f "$CFG_FILE" ]] && . "$CFG_FILE"
@@ -21,7 +22,7 @@ SEARCH_ARGS=()
 
 # TODO journal edit and delete operations (within search range)
 # TODO entry with custom date
-# TODO entry/search in custom journal
+# TODO: update time tracking functions to work with jrnl2
 
 function jrnl_time_start
 {
@@ -96,7 +97,7 @@ function jrnl_entry_search
     [[ "${OPTIONS[*]}" =~ edit ]] && edit=1
     record_start_pat='^[0-9]{4}-[0-9]{2}-[0-9]{2}'
     # case-insensitive match
-    # TODO: The last-line entry fails to match if it's a one-liner. Could place a blank line at end always.
+    # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
     search_cmd='sed -nr "/'$record_start_pat'/{x;/./I$instr;d; \${x;/./I$instr;d}}; \${x;G;/./I$instr}; {H}"'
     while [[ -n $1 ]]; do
         pattern=$1
@@ -113,11 +114,11 @@ function jrnl_entry_search
         prev_instr=$instr
         instr='P'
         # Use the start line, forward shell escaped, verbatim as the start search space
-        start_line=$(eval "$search_cmd $MAIN_JOURNAL | tail -$max_entries | head -1" | sed 's/\//\\\//g')
+        start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1" | sed 's/\//\\\//g')
         instr=$prev_instr
-        sed -n "/$start_line/,\$p" "$MAIN_JOURNAL" | eval "$search_cmd $search_cmd_suf" 
+        sed -n "/$start_line/,\$p" "$JOURNAL" | eval "$search_cmd $search_cmd_suf" 
     else
-        eval "$search_cmd $MAIN_JOURNAL $search_cmd_suf"
+        eval "$search_cmd $JOURNAL $search_cmd_suf"
     fi
 #   if [[ -n "$edit" ]]; then
 #       entry_headers=$(sed "$record_start_pat" $tmpfile)
@@ -128,7 +129,7 @@ function jrnl_entry_search
 #           grep -qF "$line" $tmpfile && (( num_edited++ )) || (( num_deleted++ ))
 #           new_record=$(sed -nr "/$record_start_pat/{x;/$line/{p;d;q}; {H;d}" $tmpfile)
 ##           search_cmd='sed -nr "/'$record_start_pat'/{x;//$instr;d}; {H;d}"'
-#           #sed -ir "/$line/,/$record_start_pat/{H;{x;/$line/{d;" $MAIN_JOURNAL
+#           #sed -ir "/$line/,/$record_start_pat/{H;{x;/$line/{d;" $JOURNAL
 #       done <<< "$entry_headers"
 #       #edited=$(cat $tmpfile)
 #       [[ $num_edited -gt 0 ]] && echo "edited $num_edited entries"
@@ -162,7 +163,7 @@ function jrnl_entry_add
     fi
     if [[ -n "$entry" ]]; then
         filter='1s/\.\s\+/.\n/' # Separate the first sentence from rest by a NL.
-        echo -e "$(date '+%Y-%m-%d %H:%M') $(sed "$filter" <<< "$entry")\n" >> "$MAIN_JOURNAL"
+        echo -e "$(date '+%Y-%m-%d %H:%M') $(sed "$filter" <<< "$entry")\n" >> "$JOURNAL"
         echo "1 new entry written"
     else 
         echo "Journal unmodified"
@@ -181,6 +182,7 @@ Need to provide a command or alias.
     -s|--search <pattern>: search for records containing <pattern>,
     -e|--edit: edit the searched entries
     -t|--tags: view list of tags
+    -ls|--list: list all available journals
     --short: view entry headings only
     --time_start: start timetracking a task
     --time_end: stop timetracking
@@ -195,6 +197,7 @@ function parseargs() {
         case $1 in
             # Switches and configuration
             -t|--tags) COMMANDS+=('tags');;
+			-ls|--ls|--list) COMMANDS+=('ls');;
             --short) OPTIONS+=('short');;
             -s|--search) 
                 args_needed=true
@@ -223,6 +226,12 @@ function parseargs() {
     done
 }
 
+# Select an alternate journal as the first argument only
+if [[ $1 && "${JOURNALS[$1]}" ]]; then
+	JOURNAL="${JOURNALS[$1]}" 
+	shift
+fi
+
 parseargs "$@"
 
 if [[ ${#COMMANDS} == 0 ]]; then
@@ -231,9 +240,11 @@ if [[ ${#COMMANDS} == 0 ]]; then
     exit 0
 fi
 
+# TODO: exclude email@tag from the list of tags
 case ${COMMANDS[0]} in
     search) jrnl_entry_search  "${SEARCH_ARGS[@]}";;
-    tags) grep -o '@\w\+' $MAIN_JOURNAL | sort | uniq -ci | sort -nr;;
+	ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
+    tags) grep -o '@[_[:alnum:]\-]\+' $JOURNAL | sort | uniq -ci | sort -nr;;
     time_start) jrnl_time_start;;
     time_end) jrnl_time_end;;
     time_report) jrnl_report_time;;
