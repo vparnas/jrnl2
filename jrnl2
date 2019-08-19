@@ -98,10 +98,10 @@ function jrnl_entry_search
     record_start_pat='^[0-9]{4}-[0-9]{2}-[0-9]{2}'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
-    search_cmd='sed -nr "/'$record_start_pat'/{x;/./I$instr;d; \${x;/./I$instr;d}}; \${x;G;/./I$instr}; {H}"'
+    search_cmd='sed -nr "/'$record_start_pat'/{x;/./$instr;d; \${x;/./$instr;d}}; \${x;G;/./$instr}; {H}"'
     while [[ -n $1 ]]; do
         pattern=$1
-        search_cmd=$(sed -r 's/([^\/]*\$instr)/{\/'"$pattern"'\/\1}/g' <<< "$search_cmd")
+        search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/I\1}/g' <<< "$search_cmd")
         shift
     done
     [[ -n $TAG_COLOR ]] && search_cmd_suf=" |GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
@@ -153,7 +153,6 @@ function jrnl_entry_add
         if [[ -n $1 ]]; then 
             entry="${@:1}"
         else
-            # TODO: how to wait for $EDITOR to truly exit?
             tmpfile=$(mktemp --tmpdir jrnl-new.XXXXXX)
             trap 'rm "$tmpfile"' 0 1 15
             $EDITOR $tmpfile
