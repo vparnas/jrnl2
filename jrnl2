@@ -10,19 +10,27 @@ TIME_TRACK_JOURNAL=""
 declare -A JOURNALS=(
     ['default']="$HOME/journals/journal.txt"
 )
-JOURNAL="${JOURNALS['default']}"
 
 # If exists, reads the above configuration from the external config
 [[ -f "$CFG_FILE" ]] && . "$CFG_FILE"
+
+JOURNAL="${JOURNALS['default']}"
 
 COMMANDS=()
 OPTIONS=()
 declare -A ARGS=()
 SEARCH_ARGS=()
 
-# TODO journal edit and delete operations (within search range)
-# TODO entry with custom date
 # TODO: update time tracking functions to work with jrnl2
+# TODO journal edit and delete operations (within search range)
+	# save the first lines of searched/edited entries
+		# Once editing session complete, iterate through all entries:
+			# replace original entry with the edited, or with blank if absent in editing session
+	# alternatively, remove original entries, insert the new ones, or whatever left of them
+# TODO: date search (on, before, after, last week, last 7 days, ...)
+    # Resolve partially via plain regex search on the date fields 
+        # ie '^2018-(0[7-9]|10)' for July-October of 2018
+# TODO entry with custom date
 
 function jrnl_time_start
 {
@@ -31,7 +39,7 @@ function jrnl_time_start
     if [[ $1 ]] ; then
         tag=$1
     else
-        options=$(jrnl --tags $TIME_TRACK_JOURNAL $TIME_TRACK_TAG | grep -v $TIME_TRACK_TAG | awk '{print $1}')
+        options=$(jrnl $TIME_TRACK_JOURNAL --tags $TIME_TRACK_TAG | grep -v $TIME_TRACK_TAG | awk '{print $1}')
         tag=$(echo -e "$options" | dmenu -i -p "Select or type a new task preceded with @")
     fi
     [ -z "$tag" ] && echo "Aborted" && return
@@ -83,12 +91,6 @@ function jrnl_entry_import
     # awk '/foo/ && /bar/'
     # grep -P '(?=.*?word1)(?=.*?word2)(?=.*?word3)^.*$'
 # max_entries works by doing a 'short' | tail -n | head -1 and finding the initial timestamp. Then redo the record search starting from that timestamp.
-# TODO: date search (on, before, after, last week, last 7 days, ...)
-    # Resolve partially via plain regex search on the date fields 
-        # ie '^2018-(0[7-9]|10)' for July-October of 2018
-# TODO: for edit, save the first lines of searched/edited entries
-    # Once editing session complete, iterate through all entries:
-        # replace original entry with the edited, or with blank if absent in editing session
 function jrnl_entry_search
 {
     max_entries=0
@@ -169,6 +171,12 @@ function jrnl_entry_add
     fi
 }
 
+# List all tags within provided journal file or otherwise stdin
+function list_tags {
+	[[ -n $1 ]] && input="$1" || input="-"
+    egrep -o '(^|\s)@[_[:alnum:]\-]+' "$input" | sed 's/^\s*//' |  sort -ib | uniq -ci | sort -nr
+}
+
 #
 ## The stdout isn't immediately visible with each selected <ctrl>+<enter> tag as the entire output is piped to echo
 #alias jrnl_select_tags="jrnl --tags | awk '{print \$1}' | dmenu | xargs echo"
@@ -226,7 +234,7 @@ function parseargs() {
 }
 
 # Select an alternate journal as the first argument only
-if [[ $1 && "${JOURNALS[$1]}" ]]; then
+if [[ -n "$1" && -n "${JOURNALS[$1]}" ]]; then
 	JOURNAL="${JOURNALS[$1]}" 
 	shift
 fi
@@ -239,11 +247,10 @@ if [[ ${#COMMANDS} == 0 ]]; then
     exit 0
 fi
 
-# TODO: exclude email@tag from the list of tags
 case ${COMMANDS[0]} in
     search) jrnl_entry_search  "${SEARCH_ARGS[@]}";;
 	ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
-    tags) grep -o '@[_[:alnum:]\-]\+' $JOURNAL | sort | uniq -ci | sort -nr;;
+    tags) list_tags "$JOURNAL";;
     time_start) jrnl_time_start;;
     time_end) jrnl_time_end;;
     time_report) jrnl_report_time;;
