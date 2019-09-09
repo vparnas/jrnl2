@@ -96,7 +96,6 @@ function jrnl_entry_search
     short_srch="$1"; shift
     max_entries="$1"; shift
 
-    journal="$(cat)" # receive journal via stdin
     $short_srch && instr='P' || instr='p'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
@@ -113,11 +112,11 @@ function jrnl_entry_search
         prev_instr=$instr
         # Output entries in --short (1-line) mode to establish the start entry for the search space
         instr='P' 
-        start_line=$(echo "$journal" | eval "$search_cmd | tail -$max_entries | head -1" | egrep -o "^$RECORD_START_PAT")
+        start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1" | egrep -o "^$RECORD_START_PAT")
         instr=$prev_instr
-		echo "$journal" | sed -n "/$start_line/,\$p" | eval "$search_cmd $cmd_suffix" 
+		sed -n "/$start_line/,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
     else
-        echo "$journal" | eval "$search_cmd $cmd_suffix"
+        eval "$search_cmd $JOURNAL $cmd_suffix"
     fi
 }
 
@@ -127,21 +126,18 @@ function jrnl_entry_edit
     [ -z "$max_entries" ] && max_entries=0
     tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
     trap 'rm "$tmpfile"' 0 1 15
-    old_records=$(jrnl_entry_search false $max_entries "$@" < "$JOURNAL" | tee "$tmpfile")
+    jrnl_entry_search false $max_entries "$@" > "$tmpfile"
 
     sed -i -r 's/^'"$RECORD_START_PAT"'/==\0 MODIFY\/DELETE RECORD BELOW. DO NOT DELETE THIS LINE.==\n\n\0/' $tmpfile
     $EDITOR $tmpfile
     num_edited=0
     num_deleted=0
     num_intact=0
-    timestamps=$(egrep -o "^$RECORD_START_PAT" <<< "$old_records")
+    timestamps=$(sed -nr "s/^==($RECORD_START_PAT).*/\1/p" $tmpfile)
     while read -r tstamp; do
-        # Expecting to only receive 1 record based on unique timestamp
-        # (don't restrict max_entries for performance reasons)
-        old_record=$(jrnl_entry_search false 0 "^$tstamp" <<< "$old_records")
+        old_record=$(jrnl_entry_search false 1 "^$tstamp")
         new_record=$(sed -rn "/^==$tstamp/,/^==/{//!p}" "$tmpfile" | sed -r '0,/^\s*$/{/^\s*$/d}')
         if [ ! "$old_record" = "$new_record" ]; then
-            #echo "new: $new_record"
             if [ -n "$new_record" ]; then
                 tmpjrnl=$(mktemp --tmpdir jrnl-temp.XXXXXX)
 				trap 'rm "$tmpfile"' 0 1 15
@@ -287,7 +283,7 @@ case ${COMMANDS[0]} in
         if [[ "${OPTIONS[*]}" =~ edit ]]; then 
 			jrnl_entry_edit $max_entries "${SEARCH_ARGS[@]}"
 		else
-			jrnl_entry_search $short_srch $max_entries "${SEARCH_ARGS[@]}" < "$JOURNAL"
+			jrnl_entry_search $short_srch $max_entries "${SEARCH_ARGS[@]}"
 		fi
 		;;
 	ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
