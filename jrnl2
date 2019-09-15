@@ -40,20 +40,25 @@ function jrnl_entry_search
 {
     short_srch="$1"; shift
     max_entries="$1"; shift
+    tags_only="$1"; shift
 
+	# if only tag list and no restrictive search terms, shortcut and exit
+	$tags_only && [ -z "$1" ] && list_tags "$JOURNAL" && return
     $short_srch && instr='P' || instr='p'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
     search_cmd='sed -nr "/^'$RECORD_START_PAT'/{x;/./$instr;d; \${x;/./$instr;d}}; \${x;G;/./$instr}; {H}"'
-    while [[ -n $1 ]]; do
-        pattern=$1
+    while [ -n "$1" ]; do
+        pattern="$1"
         search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/I\1}/g' <<< "$search_cmd")
         shift
     done
-	if [[ -n $TAG_COLOR ]]; then
+	if $tags_only; then
+		cmd_suffix=" | list_tags"
+	elif [ -n "$TAG_COLOR" ]; then
 		cmd_suffix=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
     fi
-	if [[ $max_entries -gt 0 ]]; then
+	if [ $max_entries -gt 0 ]; then
         prev_instr=$instr
         # Output entries in --short (1-line) mode to establish the start entry for the search space
         instr='P' 
@@ -72,7 +77,7 @@ function jrnl_entry_edit
     [ -z "$max_entries" ] && max_entries=0
     tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
     trap 'rm "$tmpfile"' 0 1 15
-    jrnl_entry_search false $max_entries "$@" > "$tmpfile"
+    jrnl_entry_search false $max_entries false "$@" > "$tmpfile"
 
     sed -i -r 's/^'"$RECORD_START_PAT"'/==\0 MODIFY\/DELETE RECORD BELOW. DO NOT DELETE THIS LINE.==\n\n\0/' $tmpfile
     $EDITOR $tmpfile
@@ -81,7 +86,7 @@ function jrnl_entry_edit
     num_intact=0
     timestamps=$(sed -nr "s/^==($RECORD_START_PAT).*/\1/p" $tmpfile)
     while read -r tstamp; do
-        old_record=$(jrnl_entry_search false 1 "^$tstamp")
+        old_record=$(jrnl_entry_search false 1 false "^$tstamp")
         new_record=$(sed -rn "/^==$tstamp/,/^==/{//!p}" "$tmpfile" | sed -r '0,/^\s*$/{/^\s*$/d}')
         if [ ! "$old_record" = "$new_record" ]; then
             if [ -n "$new_record" ]; then
@@ -161,9 +166,6 @@ Need to provide a command or alias.
     -t|--tags: view list of tags
     -ls|--list: list all available journals
     --short: view entry headings only
-    --time_start: start timetracking a task
-    --time_end: stop timetracking
-    --time_report: report on all timetracking
 EOF
 }
 
@@ -173,7 +175,7 @@ function parseargs() {
         is_opt=false
         case $1 in
             # Switches and configuration
-            -t|--tags) COMMANDS+=('tags');;
+            -t|--tags) OPTIONS+=('tags');;
 			-ls|--ls|--list) COMMANDS+=('ls');;
             --short) OPTIONS+=('short');;
             -s|--search) 
@@ -187,9 +189,6 @@ function parseargs() {
                 is_opt=true
                 cmd="max_entries"
                 ;;
-            --time_start) COMMANDS+=("time_start");;
-            --time_end) COMMANDS+=("time_end");;
-            --time_report) COMMANDS+=("time_report");;
             -h|--help|-*) COMMANDS+=('help');;
             *) return;; 
         esac
@@ -212,29 +211,29 @@ fi
 parseargs "$@"
 
 if [[ ${#COMMANDS} == 0 ]]; then
-    # if restrictive options present, filter on the entire journal
     if [[ ${#OPTIONS} == 0 ]]; then 
         jrnl_entry_add "$@"
         exit 0
     fi
+    # if restrictive options present, filter on the entire journal
     COMMANDS+=("search")
 fi
 
 case ${COMMANDS[0]} in
     search) 
-        [[ "${OPTIONS[*]}" =~ short ]] && short_srch=true || short_srch=false
-        [[ "${OPTIONS[*]}" =~ max_entries ]] && 
-            max_entries=${ARGS['max_entries']} || max_entries=0
+		short_srch=false
+		max_entries=0
+		tags_only=false
+        [[ "${OPTIONS[*]}" =~ short ]] && short_srch=true
+        [[ "${OPTIONS[*]}" =~ max_entries ]] && max_entries=${ARGS['max_entries']}
+        [[ "${OPTIONS[*]}" =~ tags ]] && tags_only=true
         if [[ "${OPTIONS[*]}" =~ edit ]]; then 
 			jrnl_entry_edit $max_entries "${SEARCH_ARGS[@]}"
 		else
-			jrnl_entry_search $short_srch $max_entries "${SEARCH_ARGS[@]}"
+			jrnl_entry_search $short_srch $max_entries \
+				$tags_only "${SEARCH_ARGS[@]}"
 		fi
 		;;
 	ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
-    tags) list_tags "$JOURNAL";;
-    time_start) jrnl_time_start;;
-    time_end) jrnl_time_end;;
-    time_report) jrnl_report_time;;
     help) usage;;
 esac
