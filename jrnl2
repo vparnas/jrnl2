@@ -42,8 +42,8 @@ function jrnl_entry_search
     max_entries="$1"; shift
     tags_only="$1"; shift
 
-	# if only tag list and no restrictive search terms, shortcut and exit
-	$tags_only && [ -z "$1" ] && list_tags "$JOURNAL" && return
+    # if only tag list and no restrictive search terms, shortcut and exit
+    $tags_only && [ -z "$1" ] && list_tags "$JOURNAL" && return
     $short_srch && instr='P' || instr='p'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
@@ -53,18 +53,19 @@ function jrnl_entry_search
         search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/I\1}/g' <<< "$search_cmd")
         shift
     done
-	if $tags_only; then
-		cmd_suffix=" | list_tags"
-	elif [ -n "$TAG_COLOR" ]; then
-		cmd_suffix=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
+    if $tags_only; then
+        cmd_suffix=" | list_tags"
+    elif [ -n "$TAG_COLOR" ]; then
+        cmd_suffix=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
     fi
-	if [ $max_entries -gt 0 ]; then
+    if [ $max_entries -gt 0 ]; then
         prev_instr=$instr
         # Output entries in --short (1-line) mode to establish the start entry for the search space
         instr='P' 
+        # TODO: Limiting start_line to only the timestamp causes problems with duplicate timestamps
         start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1" | egrep -o "^$RECORD_START_PAT")
         instr=$prev_instr
-		sed -n "/$start_line/,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
+        sed -n "/$start_line/,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
     else
         eval "$search_cmd $JOURNAL $cmd_suffix"
     fi
@@ -92,10 +93,10 @@ function jrnl_entry_edit
             if [ -n "$new_record" ]; then
                 tmpjrnl=$(mktemp --tmpdir jrnl-temp.XXXXXX)
                 ( # Combine the section above entry + entry + section below
-					sed -rn '/^'"$tstamp"'/,$!p' $JOURNAL
-					echo -e "$new_record""\n"
-					sed -r "1,/^$tstamp/d" $JOURNAL |
-						sed -rn "/^$RECORD_START_PAT"'/,$p'
+                    sed -rn '/^'"$tstamp"'/,$!p' $JOURNAL
+                    echo -e "$new_record""\n"
+                    sed -r "1,/^$tstamp/d" $JOURNAL |
+                        sed -rn "/^$RECORD_START_PAT"'/,$p'
                 ) > "$tmpjrnl"
                 mv "$tmpjrnl" "$JOURNAL"
                 (( num_edited++ ))
@@ -137,8 +138,8 @@ function jrnl_entry_add
     fi
     if [[ -n "$entry" ]]; then
         filter='1s/\.\s\+/.\n/' # Separate the first sentence from rest by a NL.
-		[[ ! "$entry" =~ "^$RECORD_START_PAT" ]] && 
-			prefix="$(date "+$TIMEFORMAT") " || prefix=""
+        [[ ! "$entry" =~ "^$RECORD_START_PAT" ]] && 
+            prefix="$(date "+$TIMEFORMAT") " || prefix=""
         echo -e "$prefix""$(sed "$filter" <<< "$entry")\n" >> "$JOURNAL"
         echo "1 new entry written"
     else 
@@ -148,7 +149,7 @@ function jrnl_entry_add
 
 # List all tags within provided journal file or otherwise stdin
 function list_tags {
-	[[ -n $1 ]] && input="$1" || input="-"
+    [[ -n $1 ]] && input="$1" || input="-"
     egrep -o '(^|\s)@[_[:alnum:]\-]+' "$input" | sed 's/^\s*//' |  sort -ib | uniq -ci | sort -nr
 }
 
@@ -176,7 +177,7 @@ function parseargs() {
         case $1 in
             # Switches and configuration
             -t|--tags) OPTIONS+=('tags');;
-			-ls|--ls|--list) COMMANDS+=('ls');;
+            -ls|--ls|--list) COMMANDS+=('ls');;
             --short) OPTIONS+=('short');;
             -s|--search) 
                 args_needed=true
@@ -204,8 +205,8 @@ function parseargs() {
 
 # Select an alternate journal as the first argument only
 if [[ -n "$1" && -n "${JOURNALS[$1]}" ]]; then
-	JOURNAL="${JOURNALS[$1]}" 
-	shift
+    JOURNAL="${JOURNALS[$1]}" 
+    shift
 fi
 
 parseargs "$@"
@@ -221,19 +222,19 @@ fi
 
 case ${COMMANDS[0]} in
     search) 
-		short_srch=false
-		max_entries=0
-		tags_only=false
+        short_srch=false
+        max_entries=0
+        tags_only=false
         [[ "${OPTIONS[*]}" =~ short ]] && short_srch=true
         [[ "${OPTIONS[*]}" =~ max_entries ]] && max_entries=${ARGS['max_entries']}
         [[ "${OPTIONS[*]}" =~ tags ]] && tags_only=true
         if [[ "${OPTIONS[*]}" =~ edit ]]; then 
-			jrnl_entry_edit $max_entries "${SEARCH_ARGS[@]}"
-		else
-			jrnl_entry_search $short_srch $max_entries \
-				$tags_only "${SEARCH_ARGS[@]}"
-		fi
-		;;
-	ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
+            jrnl_entry_edit $max_entries "${SEARCH_ARGS[@]}"
+        else
+            jrnl_entry_search $short_srch $max_entries \
+                $tags_only "${SEARCH_ARGS[@]}"
+        fi
+        ;;
+    ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
     help) usage;;
 esac
