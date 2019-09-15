@@ -1,0 +1,88 @@
+#!/bin/bash
+
+# TODO: update time_report function to work with jrnl2
+# TODO: update time_start and time_end to call inner functions, not external jrnl processes
+
+# parent tag included for all time-tracking entries
+TIME_TRACK_TAG="@time-track" 
+# If non-blank, use this journal for all time-tracking, instead of the default
+TIME_TRACK_JOURNAL=""
+CFG_FILE="$HOME/.jrnl2.rc"
+
+# If exists, reads the above configuration from the external config
+[[ -f "$CFG_FILE" ]] && . "$CFG_FILE"
+
+function jrnl_time_start
+{
+    $(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | 
+        grep -q '@.*start') && echo "Time already running" && return
+    if [[ $1 ]] ; then
+        tag=$1
+    else
+        options=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG | list_tags | grep -v $TIME_TRACK_TAG | awk '{print $2}')
+        if which dmenu; then
+            menu_prog="dmenu"
+        elif which slmenu; then
+            menu_prog="slmenu"
+        else
+            echo "dmenu or slmenu not found. Must manually pass in tag."
+            return
+        fi
+        tag=$(echo -e "$options" | $menu_prog -i -p "Select or type a new task preceded with @")
+    fi
+    [ -z "$tag" ] && echo "Aborted" && return
+    jrnl $TIME_TRACK_JOURNAL $TIME_TRACK_TAG $tag start
+    msg="Tracking time for $TIME_TRACK_TAG $tag"
+    echo "$msg"
+    which notify-send && notify-send -t 5000 "$msg"
+}
+
+function jrnl_time_end
+{
+    output=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | grep '@.*start')
+    [ -z "$output" ] && echo "No time currently tracked" && return
+    relevant_tags=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 | list_tags | awk '{print $2}' | xargs echo)
+    jrnl $TIME_TRACK_JOURNAL $relevant_tags end
+    msg="End time for $relevant_tags"
+    echo "$msg"
+    which notify-send && notify-send -t 5000 "$msg"
+}
+
+function jrnl_report_time
+{
+    (($# < 1)) && echo -e "Can pass additional *conjunctive* jrnl parameters. Ex: \"-to/-from DATE\", or specific tag.\n"
+    output=$(jrnl --tags -and $TIME_TRACK_JOURNAL $* $TIME_TRACK_TAG)
+    grep -q 'No tags found' <<< $output && \
+        echo "No relevant time-tracking tags found" && return
+    awk '{print $1}' <<< $output |\
+    while read -r tag ; do
+        printf '%20s: ' "$tag";
+        jrnl -and $TIME_TRACK_JOURNAL $* $TIME_TRACK_TAG $tag --short |\
+        dategrep '>2018-01-01' -o |\
+        while read -r start_time && read -r end_time ; do 
+            datediff -f "%Hh%Mm" "$start_time" "$end_time" 
+        done |\
+        xargs dateadd '2018-01-00 00:00' -f "%dd %Hh %Mm"
+    done
+}
+
+function help {
+  cat <<EOF  
+Need to provide a command or alias.
+    -h: help text,
+    -s: start timetracking a task
+    -e: end timetracking
+    -r: report on all timetracking
+EOF
+}
+
+[ -n "$1" ] && help && exit 1
+
+while getopts "serh" o; do 
+    case "${o}" in
+        s) jrnl_time_start; exit 0;;
+        e) jrnl_time_end; exit 0;;
+        r) jrnl_time_report; exit 0;;
+        h|*) help; exit 0;;
+    esac 
+done
