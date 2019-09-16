@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# TODO: Replace dateutils with plain shell functions
-
 # parent tag included for all time-tracking entries
 TIME_TRACK_TAG="@time-track" 
 # If non-blank, use this journal for all time-tracking, instead of the default
@@ -48,23 +46,36 @@ function jrnl_time_end
     which notify-send && notify-send -t 5000 "$msg"
 }
 
-function jrnl_report_time
+# TODO: a bit slow for an expansive time range
+function jrnl_time_report
 {
-    (($# < 1)) && echo -e "Can pass additional *conjunctive* search terms or specific tags.\n"
+    (($# < 1)) && echo -e "Can pass additional *conjunctive* search terms or restrictive options to jrnl in quotes.\n"
     search_params=""
     for s in "$@"; do 
-        search_params+=" -s $s"
+        search_params+=" $s"
     done
     output=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG $search_params --tags)
     [ -z "$output" ] && echo "No relevant time-tracking tags found" && return
     while read -r _ tag ; do
         printf '%20s: ' "$tag"
-        jrnl $TIME_TRACK_JOURNAL $search_params -s $TIME_TRACK_TAG -s $tag --short |\
-        grep "^$RECORD_START_PAT" -o |\
+        tstamps=$(
+            jrnl $TIME_TRACK_JOURNAL $search_params -s $TIME_TRACK_TAG \
+                -s $tag --short | 
+            egrep "^$RECORD_START_PAT" -o
+        )
+        total_s=0
         while read -r start_time && read -r end_time ; do 
-            datediff -f "%Hh%Mm" "$start_time" "$end_time" 
-        done |\
-        xargs dateadd '2018-01-00 00:00' -f "%dd %Hh %Mm"
+            d1=$(date -d "$start_time" "+%s")
+            d2=$(date -d "$end_time" "+%s")
+            (( total_s+=($d2 - $d1) ))
+        done <<< "$tstamps"
+        period_d=$(( 60*60*24 ))
+        period_h=3600
+        period_m=60
+        days=$(( $total_s / $period_d )) 
+        hours=$(( ($total_s % $period_d) / $period_h  ))
+        minutes=$(( ($total_s % $period_h) / $period_m  ))
+        printf '%dd %dh %dm\n' "$days" "$hours" "$minutes"
     done <<< "$output"
 }
 
@@ -80,11 +91,11 @@ EOF
 
 [ -z "$1" ] && help && exit 1
 
-while getopts "serh" o; do 
+getopts "serh" o && 
     case "${o}" in
-        s) jrnl_time_start; exit 0;;
-        e) jrnl_time_end; exit 0;;
-        r) jrnl_time_report; exit 0;;
-        h|*) help; exit 0;;
+        s) jrnl_time_start ;;
+        e) jrnl_time_end ;;
+        r) shift; jrnl_time_report "$@" ;;
+        h|*) help ;;
     esac 
-done
+exit 0
