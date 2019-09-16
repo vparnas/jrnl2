@@ -20,11 +20,6 @@ declare -A JOURNALS=(
 
 JOURNAL="${JOURNALS['default']}"
 
-COMMANDS=()
-OPTIONS=()
-declare -A ARGS=()
-SEARCH_ARGS=()
-
 # Imports file into jrnl with the respective last-modification date
 function jrnl_entry_import 
 {
@@ -42,8 +37,6 @@ function jrnl_entry_search
     max_entries="$1"; shift
     tags_only="$1"; shift
 
-    # if only tag list and no restrictive search terms, shortcut and exit
-    $tags_only && [ -z "$1" ] && list_tags "$JOURNAL" && return
     $short_srch && instr='P' || instr='p'
     # case-insensitive match
     # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
@@ -138,8 +131,8 @@ function jrnl_entry_add
     fi
     if [[ -n "$entry" ]]; then
         filter='1s/\.\s\+/.\n/' # Separate the first sentence from rest by a NL.
-        [[ ! "$entry" =~ "^$RECORD_START_PAT" ]] && 
-            prefix="$(date "+$TIMEFORMAT") " || prefix=""
+        sed -rn "1{/^$RECORD_START_PAT/q0};q1" <<< "$entry" && 
+            prefix="" || prefix="$(date "+$TIMEFORMAT") "
         echo -e "$prefix""$(sed "$filter" <<< "$entry")\n" >> "$JOURNAL"
         echo "1 new entry written"
     else 
@@ -170,37 +163,9 @@ Need to provide a command or alias.
 EOF
 }
 
-function parseargs() {
-    while [[ -n $1 ]]; do
-        args_needed=false
-        is_opt=false
-        case $1 in
-            # Switches and configuration
-            -t|--tags) OPTIONS+=('tags');;
-            -ls|--ls|--list) COMMANDS+=('ls');;
-            --short) OPTIONS+=('short');;
-            -s|--search) 
-                args_needed=true
-                is_opt=false
-                cmd="search"
-                ;;
-            -e|--edit) OPTIONS+=('edit');;
-            -n|--max_entries) 
-                args_needed=true
-                is_opt=true
-                cmd="max_entries"
-                ;;
-            -h|--help|-*) COMMANDS+=('help');;
-            *) return;; 
-        esac
-        shift
-        if $args_needed; then
-            [[ $# -lt 1 || $1 =~ ^\- ]] && echo "$cmd needs an argument" && exit 128
-            $is_opt && OPTIONS+=("$cmd") || COMMANDS+=("$cmd")
-            [[ "$cmd" == "search" ]] && SEARCH_ARGS+=("$1") || ARGS["$cmd"]="$1" 
-            shift
-        fi
-    done
+function assert_args() {
+    cmd="$1"; shift
+    [[ $# -lt 1 || $1 =~ ^\- ]] && echo "$cmd needs an argument" && exit 128
 }
 
 # Select an alternate journal as the first argument only
@@ -209,32 +174,53 @@ if [[ -n "$1" && -n "${JOURNALS[$1]}" ]]; then
     shift
 fi
 
-parseargs "$@"
+short_srch=false
+max_entries=0
+tags_only=false
+edit=false
+search_args=()
+options_passed=false
 
-if [[ ${#COMMANDS} == 0 ]]; then
-    if [[ ${#OPTIONS} == 0 ]]; then 
-        jrnl_entry_add "$@"
-        exit 0
-    fi
-    # if restrictive options present, filter on the entire journal
-    COMMANDS+=("search")
+while [[ -n $1 ]]; do
+    options_passed=true
+    case $1 in
+        # Switches and configuration
+        -t|--tags) 
+            tags_only=true;;
+        -ls|--ls|--list) 
+            for j in "${!JOURNALS[@]}"; do echo "$j"; done
+            exit 0;;
+        --short) 
+            short_srch=true;;
+        -s|--search) 
+            shift
+            assert_args "search" "$@"
+            search_args+=("$1")
+            ;;
+        -e|--edit) 
+            edit=true;;
+        -n|--max_entries) 
+            shift
+            assert_args "max_entries" "$@"
+            max_entries=$1
+            ;;
+        -h|--help|-*) 
+            usage
+            exit 0;;
+        *) 
+            options_passed=false
+            break;; 
+    esac
+    shift
+done
+
+if ! $options_passed; then 
+    jrnl_entry_add "$@"
+elif $edit; then 
+    jrnl_entry_edit $max_entries "${search_args[@]}"
+elif $tags_only && [ -z "$search_args" ] && [ $max_entries == 0 ]; then 
+    list_tags "$JOURNAL"
+else
+    jrnl_entry_search $short_srch $max_entries $tags_only "${search_args[@]}"
 fi
 
-case ${COMMANDS[0]} in
-    search) 
-        short_srch=false
-        max_entries=0
-        tags_only=false
-        [[ "${OPTIONS[*]}" =~ short ]] && short_srch=true
-        [[ "${OPTIONS[*]}" =~ max_entries ]] && max_entries=${ARGS['max_entries']}
-        [[ "${OPTIONS[*]}" =~ tags ]] && tags_only=true
-        if [[ "${OPTIONS[*]}" =~ edit ]]; then 
-            jrnl_entry_edit $max_entries "${SEARCH_ARGS[@]}"
-        else
-            jrnl_entry_search $short_srch $max_entries \
-                $tags_only "${SEARCH_ARGS[@]}"
-        fi
-        ;;
-    ls) for j in "${!JOURNALS[@]}"; do echo "$j"; done;;
-    help) usage;;
-esac
