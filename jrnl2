@@ -52,19 +52,21 @@ function jrnl_entry_search
         cmd_suffix=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
     fi
     if [ $max_entries -gt 0 ]; then
-        prev_instr=$instr
         # Output entries in --short (1-line) mode to establish the start entry for the search space
+        prev_instr=$instr
         instr='P' 
-        # TODO: Limiting start_line to only the timestamp causes problems with duplicate timestamps
-        start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1" | egrep -o "^$RECORD_START_PAT")
+        start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1")
         instr=$prev_instr
-        sed -n "/$start_line/,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
+        # Use line number as start search space to avoid unescaped char issues
+        line_num=$(grep -nF "$start_line" $JOURNAL | awk -F':' '{print $1}')
+        sed -n "$line_num,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
     else
         eval "$search_cmd $JOURNAL $cmd_suffix"
     fi
 }
 
 # TODO: Two identical timestamps create a problem when an edited entry matches them
+# TODO: increase performance by leveraging diff
 function jrnl_entry_edit
 {
     max_entries="$1"; shift
@@ -80,25 +82,27 @@ function jrnl_entry_edit
     num_intact=0
     timestamps=$(sed -nr "s/^==($RECORD_START_PAT).*/\1/p" $tmpfile)
     while read -r tstamp; do
-        old_record=$(jrnl_entry_search false 1 false "^$tstamp")
-        new_record=$(sed -rn "/^==$tstamp/,/^==/{//!p}" "$tmpfile" | sed -r '0,/^\s*$/{/^\s*$/d}')
-        if [ ! "$old_record" = "$new_record" ]; then
-            if [ -n "$new_record" ]; then
-                tmpjrnl=$(mktemp --tmpdir jrnl-temp.XXXXXX)
-                ( # Combine the section above entry + entry + section below
-                    sed -rn '/^'"$tstamp"'/,$!p' $JOURNAL
-                    echo -e "$new_record""\n"
-                    sed -r "1,/^$tstamp/d" $JOURNAL |
-                        sed -rn "/^$RECORD_START_PAT"'/,$p'
-                ) > "$tmpjrnl"
-                mv "$tmpjrnl" "$JOURNAL"
-                (( num_edited++ ))
-            else # delete old record
-                sed -i -nr "/^$tstamp/,/$RECORD_START_PAT/{//!d;/^$tstamp/d};p" $JOURNAL
-                (( num_deleted++ ))
-            fi
-        else
+        old_record=$(jrnl_entry_search false 1 false "^$tstamp" | sed '/./!d')
+        new_record=$(sed -rn "/^==$tstamp/,/^==/{//!p}" "$tmpfile" | sed '/./!d')
+        #echo -e "old:\n$old_record"
+        #echo -e "new:\n$new_record"
+        if [ "$old_record" = "$new_record" ]; then
             (( num_intact++ ))
+            continue
+        fi
+        if [ -n "$new_record" ]; then
+            tmpjrnl=$(mktemp --tmpdir jrnl-temp.XXXXXX)
+            ( # Combine the section above entry + entry + section below
+                sed -rn '/^'"$tstamp"'/,$!p' $JOURNAL
+                echo -e "$new_record""\n"
+                sed -r "1,/^$tstamp/d" $JOURNAL |
+                    sed -rn "/^$RECORD_START_PAT"'/,$p'
+            ) > "$tmpjrnl"
+            mv "$tmpjrnl" "$JOURNAL"
+            (( num_edited++ ))
+        else # delete old record
+            sed -i -nr "/^$tstamp/,/$RECORD_START_PAT/{//!d;/^$tstamp/d};p" $JOURNAL
+            (( num_deleted++ ))
         fi
     done <<< "$timestamps"
     [[ $num_edited -gt 0 ]] && echo "Edited $num_edited entries"
