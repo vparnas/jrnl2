@@ -80,7 +80,7 @@ function jrnl_time_report
 
 function help {
   cat <<EOF  
-Need to provide a command or alias.
+${0##*/}:
     -h: help text,
     -s: start timetracking a task
     -e: end timetracking
@@ -92,7 +92,7 @@ EOF
 
 getopts "serh" o && 
     case "${o}" in
-        s) jrnl_time_start ;;
+        s) shift; jrnl_time_start "$@" ;;
         e) jrnl_time_end ;;
         r) shift; jrnl_time_report "$@" ;;
         h|*) help ;;
