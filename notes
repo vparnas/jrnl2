@@ -1,0 +1,17 @@
+# vim: set filetype=markdown : 
+
+# TODO
+
+1. Test suite
+1. connect RECORD_START_PAT and TIME_FORMAT to properly leverage custom dates
+1. date search (on, before, after, last week, last 7 days, ...)
+    - Resolve partially via plain regex search on the date fields 
+        - ie '^2018-(0[7-9]|10)' for July-October of 2018
+1. `jrnl_entry_search`: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
+1. time-report: a bit slow for an expansive time range
+
+# RESOLVED
+
+1. `jrnl_entry_edit`
+    - two identical timestamps create a problem when an edited entry matches them
+	- FIXED - leverage entire header line to denote the record, having escaped certain troublesome characters
