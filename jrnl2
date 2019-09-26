@@ -1,11 +1,5 @@
 #!/bin/bash
 
-# TODO: Fix editing bug
-# TODO: date search (on, before, after, last week, last 7 days, ...)
-    # Resolve partially via plain regex search on the date fields 
-        # ie '^2018-(0[7-9]|10)' for July-October of 2018
-# TODO connect RECORD_START_PAT and TIME_FORMAT to properly leverage custom dates
-
 CFG_FILE="$HOME/.jrnl2.rc"
 #TAG_COLOR="00;36" 
 TIMEFORMAT="%Y-%m-%d %H:%M"
@@ -39,7 +33,6 @@ function jrnl_entry_search
 
     $short_srch && instr='P' || instr='p'
     # case-insensitive match
-    # TODO: The last-line entry fails to match if it's a one-liner without a following newline. Presently place a new line "after" each entry.
     search_cmd='sed -nr "/^'$RECORD_START_PAT'/{x;/./$instr;d; \${x;/./$instr;d}}; \${x;G;/./$instr}; {H}"'
     while [ -n "$1" ]; do
         pattern="$1"
@@ -57,33 +50,36 @@ function jrnl_entry_search
         instr='P' 
         start_line=$(eval "$search_cmd $JOURNAL | tail -$max_entries | head -1")
         instr=$prev_instr
-        # Use line number as start search space to avoid unescaped char issues
-        line_num=$(grep -nF "$start_line" $JOURNAL | awk -F':' '{print $1}')
+        [ -z "$start_line" ] && return
+        # Use line number as start search space to avoid unescaped char issues. If completely duplicate headers exist, will choose the last as start space.
+        line_num=$(grep -nF "$start_line" $JOURNAL | awk -F':' '{print $1}' | tail -1)
         sed -n "$line_num,\$p" "$JOURNAL" | eval "$search_cmd $cmd_suffix" 
     else
         eval "$search_cmd $JOURNAL $cmd_suffix"
     fi
 }
 
-# TODO: Two identical timestamps create a problem when an edited entry matches them
-# TODO: increase performance by leveraging diff
 function jrnl_entry_edit
 {
     max_entries="$1"; shift
-    [ -z "$max_entries" ] && max_entries=0
+    orig=$(jrnl_entry_search false $max_entries false "$@")
+    [ -z "$orig" ] && echo "Nothing found by that search" && return
     tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
     trap 'rm "$tmpfile"' 0 1 15
-    jrnl_entry_search false $max_entries false "$@" > "$tmpfile"
-
-    sed -i -r 's/^'"$RECORD_START_PAT"'/==\0 MODIFY\/DELETE RECORD BELOW. DO NOT DELETE THIS LINE.==\n\n\0/' $tmpfile
+    echo "$orig" > "$tmpfile"
+    sed -i -r 's/^'"$RECORD_START_PAT"'.*/== MODIFY\/DELETE RECORD BELOW. DO NOT DELETE THIS LINE. \0 ==\n\n\0/' $tmpfile
     $EDITOR $tmpfile
+    echo "$orig" | diff -q -BZ -I '==.*==' <(echo "$orig") $tmpfile \
+        >/dev/null && echo "No changes" && return
     num_edited=0
     num_deleted=0
     num_intact=0
-    timestamps=$(sed -nr "s/^==($RECORD_START_PAT).*/\1/p" $tmpfile)
-    while read -r tstamp; do
-        old_record=$(jrnl_entry_search false 1 false "^$tstamp" | sed '/./!d')
-        new_record=$(sed -rn "/^==$tstamp/,/^==/{//!p}" "$tmpfile" | sed '/./!d')
+    headers=$(sed -nr "s/^==.*($RECORD_START_PAT.*) ==$/\1/p" $tmpfile)
+    while read -r header; do
+        # Escape a bunch of conflicting characters
+        header=$(sed -r 's/([?*+-/]|\[|\])/\\\1/g' <<< "$header")
+        old_record=$(sed -rn "/^$header/,/^$RECORD_START_PAT/{//!p;/^$header/p}" <<< "$orig")
+        new_record=$(sed -rn "/^==.*$header/,/^==/{//!{/^$RECORD_START_PAT/,\$p}}" "$tmpfile")
         #echo -e "old:\n$old_record"
         #echo -e "new:\n$new_record"
         if [ "$old_record" = "$new_record" ]; then
@@ -93,18 +89,18 @@ function jrnl_entry_edit
         if [ -n "$new_record" ]; then
             tmpjrnl=$(mktemp --tmpdir jrnl-temp.XXXXXX)
             ( # Combine the section above entry + entry + section below
-                sed -rn '/^'"$tstamp"'/,$!p' $JOURNAL
+                sed -rn '/^'"$header"'/,$!p' $JOURNAL
                 echo -e "$new_record""\n"
-                sed -r "1,/^$tstamp/d" $JOURNAL |
+                sed -r "1,/^$header/d" $JOURNAL |
                     sed -rn "/^$RECORD_START_PAT"'/,$p'
             ) > "$tmpjrnl"
             mv "$tmpjrnl" "$JOURNAL"
             (( num_edited++ ))
         else # delete old record
-            sed -i -nr "/^$tstamp/,/$RECORD_START_PAT/{//!d;/^$tstamp/d};p" $JOURNAL
+            sed -i -nr "/^$header/,/$RECORD_START_PAT/{//!d;/^$header/d};p" $JOURNAL
             (( num_deleted++ ))
         fi
-    done <<< "$timestamps"
+    done <<< "$headers"
     [[ $num_edited -gt 0 ]] && echo "Edited $num_edited entries"
     [[ $num_deleted -gt 0 ]] && echo "Deleted $num_deleted entries"
     [[ $num_intact -gt 0 ]] && echo "Intact $num_intact entries"
@@ -156,14 +152,14 @@ function list_tags {
 
 function usage {
   cat <<EOF  
-Need to provide a command or alias.
+${0##*/}:
     -h|--help: help text,
     -n|--max entries <n>: limit query to the last n entries,
-    -s|--search <pattern>: search for records containing <pattern>,
-    -e|--edit: edit the searched entries
+    -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
+    -e|--edit: edit/delete the searched entries
     -t|--tags: view list of tags
     -ls|--list: list all available journals
-    --short: view entry headings only
+    -r|--short: view entry headings only
 EOF
 }
 
@@ -194,7 +190,7 @@ while [[ -n $1 ]]; do
         -ls|--ls|--list) 
             for j in "${!JOURNALS[@]}"; do echo "$j"; done
             exit 0;;
-        --short) 
+        -r|--short) 
             short_srch=true;;
         -s|--search) 
             shift
