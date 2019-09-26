@@ -27,12 +27,13 @@ A plain text, CLI journaling system inspired by [jrnl.sh](http://jrnl.sh/usage.h
 ## Non-features
 
 - Encryption. As all journals comprise of plain text, you can interface a journal with `gpg/pgp` (or your preferred framework) without much difficulty .
-- Special syntax for date searches in human language. I find this nice, but not too critical in most cases, although I may add more elaborate date searches in the future. As of now, as all timestamps respect the `%Y-%m-%d %H:%M` format by default (configurable). As such, you can exercise some craftiness and search for something like `-s '2019-09'` to return all September 2019 entries, or `-s '2019-0[\^1-5]'` to return everything from June 2019 and onwards (not to mention that you can combine searches).
+- Special syntax for date searches in human language. I find this nice, but not too critical in most cases, although I may add more elaborate date searches in the future. As of now, all timestamps respect the `%Y-%m-%d %H:%M` format by default (configurable). As such, you can exercise some craftiness and search for something like `-s '2019-09'` to return all September 2019 entries, or `-s '2019-0[\^1-5]'` to return everything from June 2019 and onwards (not to mention that you can combine searches).
 - Export/import to/from different formats. Again, plain text. Converting or parsing your output shouldn't be too difficult via the standard available Unix tools.
 
 ## Requirements
 
 Optional, for `jrnl-time`: 
+
     - `dmenu` or `slmenu`
     - `notify-send`
 
@@ -42,13 +43,13 @@ Optional, for `jrnl-time`:
 
 Display command line help:
 
-```sh
+```
 jrnl -h
 ```
 
 Ways to create a new entry:
 
-```sh
+```
 jrnl "This is a new entry"
 echo "This is another entry with a @tag" | jrnl    
 cat typed-entry.txt > jrnl
@@ -57,7 +58,9 @@ jrnl
 jrnl "Repeating the @tag a second time"
 ```
 
-```sh
+Display the last four entries
+
+```
 jrnl -n 4
 2019-09-26 15:11 This is a new entry
 
@@ -72,10 +75,10 @@ And more yet.
 2019-09-26 15:16 Repeating the @tag a second time
 ```
 
-Search for only the headers:
+Display the headers only:
 
-```sh
-jrnl -n 3 --short
+```
+jrnl -n 4 --short
 2019-09-26 15:11 This is a new entry
 2019-09-26 15:11 This is another entry with a @tag
 2019-09-26 15:12 Another entry containing yet @anothertag.
@@ -84,7 +87,7 @@ jrnl -n 3 --short
 
 Display tags contained in the entire journal, along with their respective count:
 
-```sh
+```
 jrnl --tags
 2 @tag
 1 @thirdtag
@@ -93,15 +96,15 @@ jrnl --tags
 
 Search for cases of a specific tag:
 
-```sh
+```
 jrnl -s @tag --short
 2019-09-26 15:11 This is another entry with a @tag
 2019-09-26 15:16 Repeating the @tag a second time
 ```
 
-(Case insensitive) search for entries containing both the strings 'entry' and 'another'
+(Case insensitive) search for entries containing both 'entry' and 'another'
 
-```sh
+```
 jrnl -s entry -s another
 
 2019-09-26 15:11 This is another entry with a @tag
@@ -115,7 +118,7 @@ Some more lines.
 
 Display only the tags contained within those entries:
 
-```sh
+```
 jrnl -s entry -s another --tags
 1 @thirdtag
 1 @tag
@@ -124,7 +127,7 @@ jrnl -s entry -s another --tags
 
 Edit/delete those same entries:
 
-```sh
+```
 jrnl -s entry -s another --edit
 ```
 
@@ -132,7 +135,7 @@ jrnl -s entry -s another --edit
 
 Command line options:
 
-```sh
+```
 jrnl-time -h
 jrnl-time:
     -h: help text,
@@ -141,7 +144,9 @@ jrnl-time:
     -r: report on all timetracking
 ```
 
-```sh
+Usage:
+
+```
 jrnl-time -s @newtask
 1 new entry written
 Tracking time for @time-track @newtask
@@ -159,7 +164,7 @@ No time currently tracked
 
 Display the time-tracking tasks in the 'time-track' journal:
 
-```sh
+```
 jrnl time-track --short
 2019-09-26 15:26 @time-track @newtask start
 2019-09-26 15:45 @time-track @newtask end
@@ -167,7 +172,7 @@ jrnl time-track --short
 
 Time reporting. Everything after '-r' gets passed verbatim into jrnl.
 
-```sh
+```
 jrnl-time -r # Or jrnl-time -r -n 2
 Can pass additional *conjunctive* search terms or restrictive options to jrnl in quotes.
 
