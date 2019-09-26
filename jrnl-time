@@ -46,7 +46,6 @@ function jrnl_time_end
     which notify-send && notify-send -t 5000 "$msg"
 }
 
-# TODO: a bit slow for an expansive time range
 function jrnl_time_report
 {
     (($# < 1)) && echo -e "Can pass additional *conjunctive* search terms or restrictive options to jrnl in quotes.\n"
