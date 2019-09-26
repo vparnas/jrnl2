@@ -27,7 +27,7 @@ A plain text, CLI journaling system inspired by [jrnl.sh](http://jrnl.sh/usage.h
 ## Non-features
 
 - Encryption. As all journals comprise of plain text, you can interface a journal with `gpg/pgp` (or your preferred framework) without much difficulty .
-- Special syntax for date searches in human language. I find this nice, but not too critical in most cases, although I may add more elaborate date searches in the future. As of now, all timestamps respect the `%Y-%m-%d %H:%M` format by default (configurable). As such, you can exercise some craftiness and search for something like `-s '2019-09'` to return all September 2019 entries, or `-s '2019-0[\^1-5]'` to return everything from June 2019 and onwards (not to mention that you can combine searches).
+- Special syntax for date searches in human language. I find this nice, but not too critical in most cases, although I may add more elaborate date searches in the future. As of now, all timestamps respect the `%Y-%m-%d %H:%M` format by default (configurable). As such, you can exercise some craftiness and search for something like `-s '2019-09'` to return all September 2019 entries, or `-s '2019-0[^1-5]'` to return everything from June 2019 and onwards (not to mention that you can combine searches).
 - Export/import to/from different formats. Again, plain text. Converting or parsing your output shouldn't be too difficult via the standard available Unix tools.
 
 ## Requirements
@@ -58,7 +58,7 @@ jrnl
 jrnl "Repeating the @tag a second time"
 ```
 
-Display the last four entries
+Display the last four entries:
 
 ```
 jrnl -n 4
@@ -102,7 +102,7 @@ jrnl -s @tag --short
 2019-09-26 15:16 Repeating the @tag a second time
 ```
 
-(Case insensitive) search for entries containing both 'entry' and 'another'
+(Case insensitive) search for entries containing both 'entry' and 'another':
 
 ```
 jrnl -s entry -s another
