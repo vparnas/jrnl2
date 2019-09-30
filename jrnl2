@@ -14,13 +14,6 @@ declare -A JOURNALS=(
 
 JOURNAL="${JOURNALS['default']}"
 
-# Imports file into jrnl with the respective last-modification date
-function jrnl_entry_import 
-{
-    (($# < 1)) && echo "Provide a filename to import" && return
-    (date -r $1 "+$TIMEFORMAT " && cat "$1") | jrnl
-}
-
 # Pass disjunctive arguments in regex (ie 'pat1|pat2' or '@(tag1|tag2)'
 # Pass conjunctive arguments as separate search -s operations, which are passed as separate arguments here
     # awk '/foo/ && /bar/'
@@ -223,4 +216,3 @@ elif $tags_only && [ -z "$search_args" ] && [ $max_entries == 0 ]; then
 else
     jrnl_entry_search $short_srch $max_entries $tags_only "${search_args[@]}"
 fi
-
