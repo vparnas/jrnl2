@@ -147,11 +147,12 @@ function usage {
   cat <<EOF  
 ${0##*/}:
     -h|--help: help text,
+    -j|--journal <alternate journal (use -ls to list)>,
+    -ls|--list: list all available journals
     -n|--max entries <n>: limit query to the last n entries,
     -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
     -e|--edit: edit/delete the searched entries
-    -t|--tags: view list of tags
-    -ls|--list: list all available journals
+    -t|--tags: list of existing tags
     -r|--short: view entry headings only
 EOF
 }
@@ -161,12 +162,6 @@ function assert_args() {
     [[ $# -lt 1 || $1 =~ ^\- ]] && echo "$cmd needs an argument" && exit 128
 }
 
-# Select an alternate journal as the first argument only
-if [[ -n "$1" && -n "${JOURNALS[$1]}" ]]; then
-    JOURNAL="${JOURNALS[$1]}" 
-    shift
-fi
-
 short_srch=false
 max_entries=0
 tags_only=false
@@ -175,24 +170,37 @@ search_args=()
 options_passed=false
 
 while [[ -n $1 ]]; do
-    options_passed=true
     case $1 in
-        # Switches and configuration
+        -j|--journal)
+            shift
+            assert_args "journal" "$@"
+            if [ -n "${JOURNALS[$1]}" ]; then
+                JOURNAL="${JOURNALS[$1]}"
+            else
+                echo "Journal $1 undefined."
+                exit 1
+            fi
+            ;;
         -t|--tags) 
+            options_passed=true
             tags_only=true;;
         -ls|--ls|--list) 
             for j in "${!JOURNALS[@]}"; do echo "$j"; done
             exit 0;;
         -r|--short) 
+            options_passed=true
             short_srch=true;;
         -s|--search) 
+            options_passed=true
             shift
             assert_args "search" "$@"
             search_args+=("$1")
             ;;
         -e|--edit) 
+            options_passed=true
             edit=true;;
         -n|--max_entries) 
+            options_passed=true
             shift
             assert_args "max_entries" "$@"
             max_entries=$1
@@ -200,9 +208,7 @@ while [[ -n $1 ]]; do
         -h|--help|-*) 
             usage
             exit 0;;
-        *) 
-            options_passed=false
-            break;; 
+        *) break;; 
     esac
     shift
 done
