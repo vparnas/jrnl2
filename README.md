@@ -165,7 +165,7 @@ No time currently tracked
 Display the time-tracking tasks in the 'time-track' journal:
 
 ```
-jrnl time-track --short
+jrnl -j time-track --short
 2019-09-26 15:26 @time-track @newtask start
 2019-09-26 15:45 @time-track @newtask end
 ```

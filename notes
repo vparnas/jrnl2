@@ -2,6 +2,7 @@
 
 # TODO
 
+1. BUG: jrnl_time_report. If a param such as '-n 6' is passed, once the routine starts to execute the time-stamp search for each tag within that frame, it also appends -n 6 to *that* search, returning a greater scope than warranted for the all-encompassing -n 6.
 1. Test suite
 1. connect RECORD_START_PAT and TIME_FORMAT to properly leverage custom dates
 1. date search (on, before, after, last week, last 7 days, ...)

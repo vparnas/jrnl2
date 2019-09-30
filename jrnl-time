@@ -2,8 +2,7 @@
 
 # parent tag included for all time-tracking entries
 TIME_TRACK_TAG="@time-track" 
-# If non-blank, use this journal for all time-tracking, instead of the default
-TIME_TRACK_JOURNAL=""
+TIME_TRACK_JOURNAL="default"
 RECORD_START_PAT="[0-9]{4}-[0-9]{2}-[0-9]{2}\s[0-9]{2}:[0-9]{2}"
 CFG_FILE="$HOME/.jrnl2.rc"
 
@@ -12,12 +11,12 @@ CFG_FILE="$HOME/.jrnl2.rc"
 
 function jrnl_time_start
 {
-    $(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | 
+    $(jrnl -j $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | 
         grep -q '@.*start') && echo "Time already running" && return
     if [[ $1 ]] ; then
         tag=$1
     else
-        options=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG --tags | grep -v $TIME_TRACK_TAG | awk '{print $2}')
+        options=$(jrnl -j $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG --tags | grep -v $TIME_TRACK_TAG | awk '{print $2}')
         if which dmenu; then
             menu_prog="dmenu"
         elif which slmenu; then
@@ -29,7 +28,7 @@ function jrnl_time_start
         tag=$(echo -e "$options" | $menu_prog -i -p "Select or type a new task preceded with @")
     fi
     [ -z "$tag" ] && echo "Aborted" && return
-    jrnl $TIME_TRACK_JOURNAL $TIME_TRACK_TAG $tag start
+    jrnl -j $TIME_TRACK_JOURNAL $TIME_TRACK_TAG $tag start
     msg="Tracking time for $TIME_TRACK_TAG $tag"
     echo "$msg"
     which notify-send && notify-send -t 5000 "$msg"
@@ -37,10 +36,10 @@ function jrnl_time_start
 
 function jrnl_time_end
 {
-    output=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | grep '@.*start')
+    output=$(jrnl -j $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --short | grep '@.*start')
     [ -z "$output" ] && echo "No time currently tracked" && return
-    relevant_tags=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --tags | awk '{print $2}' | xargs echo)
-    jrnl $TIME_TRACK_JOURNAL $relevant_tags end
+    relevant_tags=$(jrnl -j $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG -n 1 --tags | awk '{print $2}' | xargs echo)
+    jrnl -j $TIME_TRACK_JOURNAL $relevant_tags end
     msg="End time for $relevant_tags"
     echo "$msg"
     which notify-send && notify-send -t 5000 "$msg"
@@ -53,12 +52,12 @@ function jrnl_time_report
     for s in "$@"; do 
         search_params+=" $s"
     done
-    output=$(jrnl $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG $search_params --tags)
+    output=$(jrnl -j $TIME_TRACK_JOURNAL -s $TIME_TRACK_TAG $search_params --tags)
     [ -z "$output" ] && echo "No relevant time-tracking tags found" && return
     while read -r _ tag ; do
         printf '%20s: ' "$tag"
         tstamps=$(
-            jrnl $TIME_TRACK_JOURNAL $search_params -s $TIME_TRACK_TAG \
+            jrnl -j $TIME_TRACK_JOURNAL $search_params -s $TIME_TRACK_TAG \
                 -s $tag --short | 
             egrep "^$RECORD_START_PAT" -o
         )
