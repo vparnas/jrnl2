@@ -1,4 +1,6 @@
 #!/bin/bash
+# (c) 2019 Vitaly Parnas <vp330@parnas.me>
+# See LICENSE for licensing information.
 
 CFG_FILE="$HOME/.jrnl2.rc"
 #TAG_COLOR="00;36" 
