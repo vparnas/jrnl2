@@ -2,7 +2,6 @@
 # (c) 2019-2020 Vitaly Parnas <vp330@parnas.me>
 # See LICENSE for licensing information.
 
-CFG_FILE="$HOME/.jrnl2.rc"
 #TAG_COLOR="00;36" 
 TIMEFORMAT="%Y-%m-%d %H:%M"
 RECORD_START_PAT='[0-9]{4}-[0-9]{2}-[0-9]{2}\s[0-9]{2}:[0-9]{2}'
@@ -11,7 +10,7 @@ declare -A JOURNALS=(
     ['default']="$HOME/journals/journal.txt"
 )
 
-# If exists, reads the above configuration from the external config
+[ -f "$JRNL2_CFG" ] && CFG_FILE="$JRNL2_CFG" || CFG_FILE="$HOME/.jrnl2.rc"
 [[ -f "$CFG_FILE" ]] && . "$CFG_FILE"
 
 JOURNAL="${JOURNALS['default']}"
