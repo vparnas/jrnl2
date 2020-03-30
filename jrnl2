@@ -6,6 +6,9 @@
 TIMEFORMAT="%Y-%m-%d %H:%M"
 RECORD_START_PAT='[0-9]{4}-[0-9]{2}-[0-9]{2}\s[0-9]{2}:[0-9]{2}'
 
+# The 'tac' utility doesn't support perl-compatible regex
+TAC_RECORD_START_PAT='[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\s[0-9][0-9]:[0-9][0-9]'
+
 declare -A JOURNALS=(
     ['default']="$HOME/journals/journal.txt"
 )
@@ -22,6 +25,7 @@ JOURNAL="${JOURNALS['default']}"
 function jrnl_entry_search
 {
     short_srch="$1"; shift
+    reverse="$1"; shift
     max_entries="$1"; shift
     tags_only="$1"; shift
 
@@ -34,9 +38,12 @@ function jrnl_entry_search
         shift
     done
     if $tags_only; then
-        cmd_suffix=" | list_tags"
-    elif [ -n "$TAG_COLOR" ]; then
-        cmd_suffix=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
+        cmd_suffix+=" | list_tags"
+    else
+        $reverse && 
+            cmd_suffix+=" | tac -s '^$TAC_RECORD_START_PAT' --before --regex"
+        [ -n "$TAG_COLOR" ] && 
+            cmd_suffix+=" | GREP_COLORS='mt=$TAG_COLOR' grep --color -e '' -e '@\w\+'"
     fi
     if [ $max_entries -gt 0 ]; then
         # Output entries in --short (1-line) mode to establish the start entry for the search space
@@ -155,6 +162,7 @@ ${0##*/}:
     -e|--edit: edit/delete the searched entries
     -t|--tags: list of existing tags
     -r|--short: view entry headings only
+    -R|--reverse: view entries in reverse
 EOF
 }
 
@@ -167,6 +175,7 @@ short_srch=false
 max_entries=0
 tags_only=false
 edit=false
+reverse=false
 search_args=()
 options_passed=false
 
@@ -191,6 +200,9 @@ while [[ -n $1 ]]; do
         -r|--short) 
             options_passed=true
             short_srch=true;;
+        -R|--reverse) 
+            options_passed=true
+            reverse=true;;
         -s|--search) 
             options_passed=true
             shift
@@ -221,5 +233,5 @@ elif $edit; then
 elif $tags_only && [ -z "$search_args" ] && [ $max_entries == 0 ]; then 
     list_tags "$JOURNAL"
 else
-    jrnl_entry_search $short_srch $max_entries $tags_only "${search_args[@]}"
+    jrnl_entry_search $short_srch $reverse $max_entries $tags_only "${search_args[@]}"
 fi
