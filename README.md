@@ -18,6 +18,7 @@ A plain text, CLI journaling system inspired by [jrnl.sh](http://jrnl.sh/usage.h
 - Combine multiple search patterns conjunctively or disjunctively.
 - Limit the search output to a specified number of entries.
 - Return full entries or merely the headers in searches.
+- Reverse the entry output order
 - Display only the tags contained in the search space.
 - Edit/delete existing entries.
 - Supports multiple journals.
@@ -45,6 +46,15 @@ Display command line help:
 
 ```
 jrnl -h
+    -h|--help: help text,
+    -j|--journal <alternate journal (use -ls to list)>,
+    -ls|--list: list all available journals
+    -n|--max entries <n>: limit query to the last n entries,
+    -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
+    -e|--edit: edit/delete the searched entries
+    -t|--tags: list of existing tags
+    -r|--short: view entry headings only
+    -R|--reverse: view entries in reverse
 ```
 
 Ways to create a new entry:

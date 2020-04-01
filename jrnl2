@@ -63,7 +63,7 @@ function jrnl_entry_search
 function jrnl_entry_edit
 {
     max_entries="$1"; shift
-    orig=$(jrnl_entry_search false $max_entries false "$@")
+    orig=$(jrnl_entry_search false false $max_entries false "$@")
     [ -z "$orig" ] && echo "Nothing found by that search" && return
     tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
     trap 'rm "$tmpfile"' 0 1 15
