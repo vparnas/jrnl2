@@ -70,15 +70,15 @@ function jrnl_entry_edit
     echo "$orig" > "$tmpfile"
     sed -i -r 's/^'"$RECORD_START_PAT"'.*/== MODIFY\/DELETE RECORD BELOW. DO NOT DELETE THIS LINE. \0 ==\n\n\0/' $tmpfile
     $EDITOR $tmpfile
-    echo "$orig" | diff -q -BZ -I '==.*==' <(echo "$orig") $tmpfile \
+    echo "$orig" | diff -q -BZ -I '==.*==' - $tmpfile \
         >/dev/null && echo "No changes" && return
     num_edited=0
     num_deleted=0
     num_intact=0
     headers=$(sed -nr "s/^==.*($RECORD_START_PAT.*) ==$/\1/p" $tmpfile)
     while read -r header; do
-        # Escape a bunch of conflicting characters
-        header=$(sed -r 's/([?*+-/]|\[|\])/\\\1/g' <<< "$header")
+        # Escape a bunch of characters conflicting with sed
+        header=$(sed -r 's/([?*+-/(){}|^$\\]|\[|\])/\\\1/g' <<< "$header")
         old_record=$(sed -rn "/^$header/,/^$RECORD_START_PAT/{//!p;/^$header/p}" <<< "$orig")
         new_record=$(sed -rn "/^==.*$header/,/^==/{//!{/^$RECORD_START_PAT/,\$p}}" "$tmpfile")
         #echo -e "old:\n$old_record"
