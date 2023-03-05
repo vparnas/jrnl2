@@ -14,9 +14,12 @@ declare -A JOURNALS=(
 )
 
 [ -f "$JRNL2_CFG" ] && CFG_FILE="$JRNL2_CFG" || CFG_FILE="$HOME/.jrnl2.rc"
-[[ -f "$CFG_FILE" ]] && . "$CFG_FILE"
+[ -f "$CFG_FILE" ] && . "$CFG_FILE"
 
-JOURNAL="${JOURNALS['default']}"
+[ -z $DEFAULT_JRNL ] && DEFAULT_JRNL='default'
+JOURNAL="${JOURNALS[$DEFAULT_JRNL]}"
+[ -z "$JOURNAL" ] && echo "Journal '$DEFAULT_JRNL' not found" && exit 1
+[ ! -f "$JOURNAL" ] && echo "Cannot open $JOURNAL" && exit 1
 
 # Pass disjunctive arguments in regex (ie 'pat1|pat2' or '@(tag1|tag2)'
 # Pass conjunctive arguments as separate search -s operations, which are passed as separate arguments here
@@ -144,7 +147,7 @@ function jrnl_entry_add
 # List all tags within provided journal file or otherwise stdin
 function list_tags {
     [[ -n $1 ]] && input="$1" || input="-"
-    egrep -o '(^|\s)@[_[:alnum:]\-]+' "$input" | sed 's/^\s*//' | sort -fib | uniq -ci | sort -nr
+    grep -E -o '(^|\s)@[_[:alnum:]\-]+' "$input" | sed 's/^\s*//' | sort -fib | uniq -ci | sort -nr
 }
 
 #
@@ -157,8 +160,9 @@ ${0##*/}:
     -h|--help: help text,
     -j|--journal <alternate journal (use -ls to list)>,
     -ls|--list: list all available journals
-    -n|--max entries <n>: limit query to the last n entries,
+    -n|--max-entries <n>: limit query to the last n entries,
     -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
+    -S|--search-all <pattern>: search all journals for records containing <pattern>. Cannot combine with --edit.
     -e|--edit: edit/delete the searched entries
     -t|--tags: list of existing tags
     -r|--short: view entry headings only
@@ -175,6 +179,7 @@ short_srch=false
 max_entries=0
 tags_only=false
 edit=false
+search_all=false
 reverse=false
 search_args=()
 options_passed=false
@@ -203,16 +208,23 @@ while [[ -n $1 ]]; do
         -R|--reverse) 
             options_passed=true
             reverse=true;;
-        -s|--search) 
+        -s|--search)
             options_passed=true
             shift
             assert_args "search" "$@"
             search_args+=("$1")
             ;;
+        -S|--search-all)
+            options_passed=true
+            shift
+            assert_args "search-all" "$@"
+            search_args+=("$1")
+            search_all=true
+            ;;
         -e|--edit) 
             options_passed=true
             edit=true;;
-        -n|--max_entries) 
+        -n|--max-entries) 
             options_passed=true
             shift
             assert_args "max_entries" "$@"
@@ -228,6 +240,12 @@ done
 
 if ! $options_passed; then 
     jrnl_entry_add "$@"
+elif $search_all; then
+    for jrnl_label in "${!JOURNALS[@]}"; do
+        JOURNAL=${JOURNALS[$jrnl_label]}
+        echo "=== $jrnl_label ==="
+        jrnl_entry_search $short_srch $reverse $max_entries $tags_only "${search_args[@]}"
+    done
 elif $edit; then 
     jrnl_entry_edit $max_entries "${search_args[@]}"
 elif $tags_only && [ -z "$search_args" ] && [ $max_entries == 0 ]; then 
