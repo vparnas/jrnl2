@@ -31,13 +31,15 @@ function jrnl_entry_search
     reverse="$1"; shift
     max_entries="$1"; shift
     tags_only="$1"; shift
+    case_sens="$1"; shift
 
     $short_srch && instr='P' || instr='p'
+    $case_sens && mod='' || mod='I'
     # case-insensitive match
     search_cmd='sed -nr "/^'$RECORD_START_PAT'/{x;/./$instr;d; \${x;/./$instr;d}}; \${x;G;/./$instr}; {H}"'
     while [ -n "$1" ]; do
         pattern="$1"
-        search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/I\1}/g' <<< "$search_cmd")
+        search_cmd=$(sed -r 's/(\$instr)/{\/'"$pattern"'\/\$mod\1}/g' <<< "$search_cmd")
         shift
     done
     if $tags_only; then
@@ -66,7 +68,7 @@ function jrnl_entry_search
 function jrnl_entry_edit
 {
     max_entries="$1"; shift
-    orig=$(jrnl_entry_search false false $max_entries false "$@")
+    orig=$(jrnl_entry_search false false $max_entries false $case_sens "$@")
     [ -z "$orig" ] && echo "Nothing found by that search" && return
     tmpfile=$(mktemp --tmpdir jrnl-edit.XXXXXX)
     trap 'rm "$tmpfile"' 0 1 15
@@ -163,6 +165,7 @@ ${0##*/}:
     -n|--max-entries <n>: limit query to the last n entries,
     -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
     -S|--search-all <pattern>: search all journals for records containing <pattern>. Cannot combine with --edit.
+    -c|--case: case-sensitive search (insensitive by default)
     -e|--edit: edit/delete the searched entries
     -t|--tags: list of existing tags
     -r|--short: view entry headings only
@@ -178,6 +181,7 @@ function assert_args() {
 short_srch=false
 max_entries=0
 tags_only=false
+case_sens=false
 edit=false
 search_all=false
 reverse=false
@@ -199,6 +203,9 @@ while [[ -n $1 ]]; do
         -t|--tags) 
             options_passed=true
             tags_only=true;;
+        -c|--case)
+            options_passed=true
+            case_sens=true;;
         -ls|--ls|--list) 
             for j in "${!JOURNALS[@]}"; do echo "$j"; done
             exit 0;;
@@ -244,12 +251,12 @@ elif $search_all; then
     for jrnl_label in "${!JOURNALS[@]}"; do
         JOURNAL=${JOURNALS[$jrnl_label]}
         echo "=== $jrnl_label ==="
-        jrnl_entry_search $short_srch $reverse $max_entries $tags_only "${search_args[@]}"
+        jrnl_entry_search $short_srch $reverse $max_entries $tags_only $case_sens "${search_args[@]}"
     done
 elif $edit; then 
     jrnl_entry_edit $max_entries "${search_args[@]}"
 elif $tags_only && [ -z "$search_args" ] && [ $max_entries == 0 ]; then 
     list_tags "$JOURNAL"
 else
-    jrnl_entry_search $short_srch $reverse $max_entries $tags_only "${search_args[@]}"
+    jrnl_entry_search $short_srch $reverse $max_entries $tags_only $case_sens "${search_args[@]}"
 fi
