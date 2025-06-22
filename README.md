@@ -49,8 +49,10 @@ jrnl -h
     -h|--help: help text,
     -j|--journal <alternate journal (use -ls to list)>,
     -ls|--list: list all available journals
-    -n|--max entries <n>: limit query to the last n entries,
+    -n|--max-entries <n>: limit query to the last n entries,
     -s|--search <pattern>: search for records containing <pattern>. Can combine for a conjunctive search.
+    -S|--search-all <pattern>: search all journals for records containing <pattern>. Cannot combine with --edit.
+    -c|--case: case-sensitive search (insensitive by default)
     -e|--edit: edit/delete the searched entries
     -t|--tags: list of existing tags
     -r|--short: view entry headings only
@@ -193,15 +195,19 @@ Can pass additional *conjunctive* search terms or restrictive options to jrnl in
 
 ## Configuration
 
-Include `~/.jrnl2.rc` in your home directory to overwrite the default configuration values:
+Include `$HOME/.jrnl2.rc` or a file defined by the environment variable `$JRNL2_CFG`, similarly to the following to overwrite the default configuration values.
+
+IMPORTANT: Should you change `TIMEFORMAT` from the default North American as acceptable by the 'date' command, you must carefully modify `RECORD_START_PAT` and `TAC_RECORD_START_PAT` to correspond. Make sure to follow the same regular expression format. Their structure should be clear from the example.
 
 ```conf
-TIME_TRACK_TAG="@time-track"
-TIME_TRACK_JOURNAL="time-track"
-TAG_COLOR="00;36" 
+DEFAULT_JRNL="default"
 
-TIMEFORMAT="%Y-%m-%d %H:%M"
+TIMEFORMAT="%Y-%m-%d %H:%M" # As used by the 'date' utility
 RECORD_START_PAT="[0-9]{4}-[0-9]{2}-[0-9]{2}\s[0-9]{2}:[0-9]{2}"
+
+# The 'tac' utility doesn't support perl-compatible regex
+TAC_RECORD_START_PAT="[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\s[0-9][0-9]:[0-9][0-9]"
+
 EDITOR="vim"
 
 declare -A JOURNALS=(
