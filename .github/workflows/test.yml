@@ -1,0 +1,19 @@
+name: jrnl2 tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x jrnl test/test_jrnl.sh
+
+      - name: Run test suite
+        run: ./test/test_jrnl.sh ./jrnl2
