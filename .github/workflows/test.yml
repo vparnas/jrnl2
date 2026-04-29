@@ -13,7 +13,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make scripts executable
-        run: chmod +x jrnl test/test_jrnl.sh
+        run: chmod +x jrnl2 test/test_jrnl.sh
 
       - name: Run test suite
         run: ./test/test_jrnl.sh ./jrnl2
